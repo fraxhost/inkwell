@@ -3,7 +3,7 @@
 ## Standards
 
 - All code changes follow the PR checklist (docs/reviews, .github/PULL_REQUEST_TEMPLATE.md)
-- Architecture conformance per ADR-001 (docs/architecture/adr-001-modular-monolith.md)
+- Architecture conformance per ADR-001 (docs/architecture/adr-001-modular.monolith.md)
 - API contract conventions per docs/design/api-contract.md
 
 ## Reviews
@@ -11,11 +11,16 @@
 - Every merged change is self-reviewed (author) then peer-reviewed before merge
 - Review findings logged in docs/reviews/
 
-## Testing (expanded in Lecture 12-14)
+## Testing (docs/quality/SQA-PLAN.md)
 
-- Unit tests: Services and Repositories (Jest) — starting Lecture 12
-- Integration tests: Routes (Supertest) — starting Lecture 13
-- End-to-end tests: critical user flows (Playwright) — starting Lecture 14
+- Unit tests: Services and Repositories (Jest) — ACTIVE (Lecture 12)
+- Integration tests: Routes → Services → Repositories, real test DB (Supertest) — ACTIVE (Lecture 13)
+- Component tests: React components (RTL) — ACTIVE (Lecture 13)
+- End-to-end tests: critical user flows, mobile + desktop viewports (Playwright) — ACTIVE (Lecture 14)
+- Automated accessibility checks (axe-core) — ACTIVE (Lecture 14)
+- Documentation verification (README, Section 4.10) — ACTIVE (Lecture 14)
+- Security testing — starting Lecture 15
+- Performance/load testing — deferred; revisit at Lecture 19-20 (architecture scale-out)
 
 ## Defect Tracking
 

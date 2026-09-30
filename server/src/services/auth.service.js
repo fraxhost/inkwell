@@ -47,7 +47,14 @@ export const AuthService = {
 
   async login({ email, password }) {
     const user = await UserRepository.findByEmail(email);
-    if (!user) {
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      // fix: a structured, leveled, machine-parseable log
+      // line — searchable by "event" or "email" once aggregated
+      // , not just a free-form sentence buried in scrollback.
+      logger.warn(
+        { event: "auth.login.failed", email },
+        "Failed login attempt",
+      );
       throw new InvalidCredentialsError();
     }
 
@@ -65,4 +72,5 @@ export {
   EmailAlreadyRegisteredError,
   WeakPasswordError,
   InvalidCredentialsError,
+  ValidationError,
 };

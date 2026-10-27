@@ -1,17 +1,157 @@
+# .github/workflows/ci.yml
+#
+# Section 4.3's generic steps, applied in full: checkout, set up
+# environment, install dependencies, build, test, report — for every
+# layer of Inkwell's testing pyramid (Lectures 12-14).
+
 name: CI
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
-  pull_request:
+  # Section 4.2: this is PER-PULL-REQUEST CI (gating the merge
+  # decision, per Lecture 17's GitHub Flow) plus a push-to-main
+  # safety check.
 
 jobs:
-  dependency-audit:
+  server-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: inkwell
+          POSTGRES_PASSWORD: inkwell
+          POSTGRES_DB: inkwell_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout                       # Section 4.3, step 1
+        uses: actions/checkout@v4
+
+      - name: Set up environment              # Section 4.3, step 2
+        uses: actions/setup-node@v4
+        with:
+          # Walkthrough pins "20", but this repo's own Lecture 10 fix
+          # set server/package.json's engines to >=22 — kept consistent
+          # with that here, same as the Lecture 18 Dockerfile.
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies            # Section 4.3, step 3
+        working-directory: server
+        run: npm ci
+
+      - name: Generate Prisma client
+        # Not in the walkthrough: `npm ci` alone never generates the
+        # Prisma client (verified directly — node_modules/.prisma/client
+        # does not exist after a clean `npm ci`). Without this step,
+        # "Run tests" below crashes with the same "Cannot find module
+        # '.prisma/client/default'" error documented as a local
+        # troubleshooting note back in Lecture 8.
+        working-directory: server
+        run: npx prisma generate
+
+      - name: Apply database migrations       # part of "build" for a
+        working-directory: server             # server with a database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://inkwell:inkwell@localhost:5432/inkwell_test
+
+      - name: Run tests                       # Section 4.3, step "test"
+        working-directory: server             # Lecture 12 unit + Lecture 13 integration
+        run: npm test
+        env:
+          DATABASE_URL: postgresql://inkwell:inkwell@localhost:5432/inkwell_test
+
+      - name: Run tests with coverage
+        # Lecture 22, Section 5.2: its own prose correctly warns that
+        # plain `npx jest` bypasses the --experimental-vm-modules flag
+        # this project's ES modules require — but the CI snippet it then
+        # gives uses exactly that broken form (`npx jest --coverage`).
+        # Confirmed directly: it fails all 4 suites, 0 tests run. Uses
+        # the same invocation as npm test, with --coverage appended.
+        working-directory: server
+        run: node --experimental-vm-modules --env-file=.env.test node_modules/.bin/jest --coverage
+        env:
+          DATABASE_URL: postgresql://inkwell:inkwell@localhost:5432/inkwell_test
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: server/coverage/
+
+  client-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - run: npm audit --audit-level=high
-        working-directory: server
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+      - working-directory: client
+        run: npm ci
+      - working-directory: client
+        run: npx vitest run   # Lecture 13's React Testing Library suite
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [server-tests, client-tests]
+    # Section 4.1's "cheap when caught early" principle, encoded
+    # directly: the slowest test layer only runs after the fast
+    # layers have already passed, so an obviously broken change
+    # fails fast without waiting for the full E2E suite.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npx playwright install --with-deps
+      - run: npx playwright test   # Lecture 14's E2E + accessibility suites
+
+  prepare-deployment-artifact:
+    runs-on: ubuntu-latest
+    needs: [server-tests, client-tests, e2e-tests]
+    if: github.ref == 'refs/heads/main'
+    # Section 4.4: "preparing for deployment" — build and tag the
+    # image, but do NOT deploy it. Deployment itself is Lecture 21's
+    # separate concern (Continuous Delivery).
+    permissions:
+      # Not in the walkthrough: GITHUB_TOKEN defaults to read-only for
+      # packages on many repos (increasingly the GitHub-wide default) —
+      # without this, "docker push ghcr.io/..." below 403s. Not
+      # verifiable from a local checkout with no GitHub remote; flagged
+      # as a well-documented, standard requirement for this exact
+      # pattern rather than confirmed against a live Actions run.
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build tagged Docker image
+        run: docker build -t inkwell-server:${{ github.sha }} ./server
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        # GITHUB_TOKEN is automatically provided by Actions — no manual
+        # credential setup needed to push to your own repository's registry.
+
+      - name: Tag and push the image to GHCR
+        run: |
+          docker tag inkwell-server:${{ github.sha }} ghcr.io/${{ github.repository_owner }}/inkwell-server:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/inkwell-server:${{ github.sha }}
+        # This is the exact, unmodified image Lecture 21's CD workflow
+        # will later retrieve and deploy — pushed once, by tag, never
+        # rebuilt again downstream.
+

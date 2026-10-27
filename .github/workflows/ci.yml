@@ -87,7 +87,7 @@ jobs:
         # on to Jest. Plain "npx jest" would skip that flag and fail.
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: server/coverage/
@@ -171,7 +171,7 @@ jobs:
 
       - name: Upload the Playwright report
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-report
           path: playwright-report/

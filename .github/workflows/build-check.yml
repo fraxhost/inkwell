@@ -27,7 +27,7 @@ jobs:
     # machine, provisioned and torn down automatically by GitHub.
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         # Section 4.2: a reusable ACTION, not a raw shell command —
         # this one is maintained by GitHub itself and handles the
         # (surprisingly fiddly) details of cloning the right commit.

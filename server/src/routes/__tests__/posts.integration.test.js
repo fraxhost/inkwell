@@ -26,13 +26,15 @@ test("full flow: register, publish, and browse (US-01, US-03, US-04 validation)"
 
   expect(registerRes.status).toBe(201);
   const { user, accessToken } = registerRes.body;
+  // Lecture 22: the response carries only public fields.
+  expect(user).toEqual({ id: expect.any(String), displayName: "Alice" });
+
 
   // Act: publish a real post as that user
   const publishRes = await request(app)
     .post("/api/posts")
     .set("Authorization", `Bearer ${accessToken}`)
     .send({
-      authorId: user.id,
       title: "Hello, Inkwell",
       body: "My first real post.",
     });

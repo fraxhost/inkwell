@@ -6,6 +6,8 @@ import bcrypt from "bcrypt";
 import { UserRepository } from "../repositories/user.repository.js";
 import { assertNonEmpty, ValidationError } from "../utils/validation.js";
 import { TokenService } from "./token.service.js";
+import { logger } from "../lib/logger.js";
+import { toPublicUser } from "../dto/user.dto.js";
 
 class EmailAlreadyRegisteredError extends Error {}
 class WeakPasswordError extends Error {}
@@ -42,7 +44,9 @@ export const AuthService = {
     }
 
     const tokens = TokenService.issueTokens(user);
-    return { user, ...tokens };
+    // Lecture 22: return only the public fields (Lecture 16's DTO), never
+    // the database row, which includes passwordHash and email.
+    return { user: toPublicUser(user), ...tokens };
   },
 
   async login({ email, password }) {
@@ -58,13 +62,8 @@ export const AuthService = {
       throw new InvalidCredentialsError();
     }
 
-    const matches = await bcrypt.compare(password, user.passwordHash);
-    if (!matches) {
-      throw new InvalidCredentialsError();
-    }
-
     const tokens = TokenService.issueTokens(user);
-    return { user, ...tokens };
+    return { user: toPublicUser(user), ...tokens };
   },
 };
 

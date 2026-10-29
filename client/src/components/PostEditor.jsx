@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getToken, getUser } from "../lib/auth";
+import { getToken } from "../lib/auth";
+import { useAuth } from "../lib/auth-context";
 
 const STATES = { IDLE: "idle", EDITING: "editing", PUBLISHING: "publishing" };
 
@@ -11,6 +12,7 @@ export function PostEditor() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [errorMessage, setErrorMessage] = useState(null);
+  const { signOut } = useAuth();
   const navigate = useNavigate();
 
   async function handlePublish() {
@@ -24,10 +26,17 @@ export function PostEditor() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
         },
-        // authorId added here: without it every publish attempt fails
-        // server-side (see the auth.js note above).
-        body: JSON.stringify({ title, body, authorId: getUser()?.id }),
+        // No authorId: since Lecture 15 the server takes the author from
+        // the verified token (requireAuth), never from the request body.
+        body: JSON.stringify({ title, body }),
       });
+
+      if (response.status === 401) {
+        // Lecture 22: the 15-minute access token (Lecture 6) has expired.
+        signOut();
+        navigate("/login");
+        return;
+      }
 
       if (!response.ok) {
         const { error } = await response.json();

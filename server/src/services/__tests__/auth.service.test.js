@@ -24,11 +24,17 @@ jest.unstable_mockModule("../../repositories/user.repository.js", () => ({
 jest.unstable_mockModule("../token.service.js", () => ({
   TokenService: mockTokenService,
 }));
+jest.unstable_mockModule("../../lib/logger.js", () => ({
+  logger: { warn: jest.fn() },
+}));
+
+const { default: bcrypt } = await import("bcrypt");
 
 const {
   AuthService,
   EmailAlreadyRegisteredError,
   WeakPasswordError,
+  InvalidCredentialsError,
   ValidationError,
 } = await import("../auth.service.js");
 
@@ -111,5 +117,57 @@ describe("AuthService.register", () => {
         password: "correcthorse",
       }),
     ).rejects.toBeInstanceOf(EmailAlreadyRegisteredError);
+  });
+});
+
+describe("AuthService responses (Lecture 22)", () => {
+  test("register returns only public user fields, never passwordHash or email", async () => {
+    mockUserRepository.findByEmail.mockResolvedValue(null);
+    mockUserRepository.create.mockResolvedValue({
+      id: "u1",
+      email: "a@x.com",
+      displayName: "Alice",
+      passwordHash: "$2b$10$secret",
+    });
+
+    const { user } = await AuthService.register({
+      email: "a@x.com",
+      displayName: "Alice",
+      password: "correcthorse",
+    });
+
+    expect(user).toEqual({ id: "u1", displayName: "Alice" });
+  });
+});
+
+describe("AuthService.login", () => {
+  test("rejects a wrong password with InvalidCredentialsError, not a crash", async () => {
+    mockUserRepository.findByEmail.mockResolvedValue({
+      id: "u1",
+      email: "a@x.com",
+      displayName: "Alice",
+      passwordHash: await bcrypt.hash("correcthorse", 4),
+    });
+
+    await expect(
+      AuthService.login({ email: "a@x.com", password: "wrong-password" }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsError);
+  });
+
+  test("returns tokens and only public user fields for the right password", async () => {
+    mockUserRepository.findByEmail.mockResolvedValue({
+      id: "u1",
+      email: "a@x.com",
+      displayName: "Alice",
+      passwordHash: await bcrypt.hash("correcthorse", 4),
+    });
+
+    const result = await AuthService.login({
+      email: "a@x.com",
+      password: "correcthorse",
+    });
+
+    expect(result.user).toEqual({ id: "u1", displayName: "Alice" });
+    expect(result.accessToken).toBe("fake-access");
   });
 });

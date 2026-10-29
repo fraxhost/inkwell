@@ -28,8 +28,11 @@ export function saveUser(user) {
 }
 
 export function getUser() {
-  const raw = localStorage.getItem(USER_KEY);
-  return raw ? JSON.parse(raw) : null;
+  try {
+    return JSON.parse(localStorage.getItem(USER_KEY));
+  } catch {
+    return null; // corrupted value: treat as signed out
+  }
 }
 
 export function clearUser() {
